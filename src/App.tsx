@@ -1,35 +1,59 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from "react";
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const feedbackUrl = import.meta.env.VITE_BASE_URL;
+  const OAuthUrl = `${feedbackUrl}/oauth/canvas/initiate?canvas_instance_url=https://learnwise.instructure.com`;
+  const sessionCheckUrl = `${feedbackUrl}/api/auth/session`;
+
+  const [sessionCheckResult, setSessionCheckResult] = useState<string | null>(
+    null
+  );
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const oauthDomain = new URL(OAuthUrl).origin;
+      if (event.origin === oauthDomain) {
+        localStorage.setItem("feedbackJwtToken", event.data);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [OAuthUrl]);
+
+  const openOAuthWindow = () => {
+    const popup = window.open(OAuthUrl, "oauthPopup", "width=600,height=600");
+    if (popup) popup.focus();
+  };
+
+  const checkSession = async () => {
+    try {
+      const feedbackJwtToken = localStorage.getItem("feedbackJwtToken");
+      const response = await fetch(sessionCheckUrl, {
+        headers: {
+          Authorization: `Bearer ${feedbackJwtToken}`,
+        },
+      });
+      const data = await response.json();
+      setSessionCheckResult(data.success ? "Authorized" : "Not Authorized");
+    } catch {
+      setSessionCheckResult("Error");
+    }
+  };
 
   return (
     <>
       <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+        <button onClick={openOAuthWindow}>Open OAuth</button>
+        <button onClick={checkSession}>Check Session</button>
+        {sessionCheckResult && <p>Session Check: {sessionCheckResult}</p>}
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
     </>
-  )
+  );
 }
 
-export default App
+export default App;
